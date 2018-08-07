@@ -5,7 +5,7 @@ import click_spinner
 
 from botocore.exceptions import ProfileNotFound, NoRegionError
 
-version = '0.0.1'
+version = '0.0.0'
 
 PAGE_SIZE = 100
 

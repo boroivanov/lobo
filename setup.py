@@ -4,11 +4,12 @@ from setuptools import setup, find_packages
 requirements = [
     'Click>=6.0',
     'boto3>=1.5.33',
+    'click-spinner>=0.1.8',
 ]
 
 setup(
     name="lobo",
-    version="0.0.1",
+    version="0.0.0",
     url="https://github.com/boroivanov/lobo",
 
     author='Borislav Ivanov',

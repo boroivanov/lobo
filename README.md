@@ -10,3 +10,14 @@ A simple cli for listing AWS load balancers and their instances/targets.
 ```bash
 pip install lobo
 ```
+
+# Usage
+```bash
+# List all load balancers
+$ lobo
+
+# List load balancers which match <name>
+$ lobo <name>
+
+# Pass `-s` and/or `-t` to list scheme/type.
+```

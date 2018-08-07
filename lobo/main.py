@@ -23,8 +23,12 @@ def cli(region, profile, scheme, lb_type):
 
     with click_spinner.spinner():
         lbs = describe_all_load_balancers(elb, elbv2)
-        name_pad = lb_name_max_len(lbs)
 
+    print_load_balancers_info(lbs, scheme=scheme, lb_type=lb_type)
+
+
+def print_load_balancers_info(lbs, **kwargs):
+    name_pad = lb_name_max_len(lbs)
     for lb in sorted(lbs, key=lambda k: k['LoadBalancerName']):
         template = '{name:{name_pad}}'
         params = {
@@ -32,9 +36,10 @@ def cli(region, profile, scheme, lb_type):
             'name_pad': name_pad,
             'lb': lb,
         }
-        toggled = {'scheme': scheme, 'lb_type': lb_type}
-        template, params = show_toggled_outputs(template, params, **toggled)
+        template, params = show_toggled_outputs(template, params, **kwargs)
 
+        template += '  {states}'
+        params['states'] = lb.get('states', '')
         print(template.format(**params))
 
 
@@ -53,7 +58,12 @@ def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
 def describe_load_balancers_elbv2(client, names=[], page_size=PAGE_SIZE):
     params = {'Names': names, 'PageSize': page_size}
     key = 'LoadBalancers'
-    return loop_load_balancers_pager(client, params, key)
+    lbs = loop_load_balancers_pager(client, params, key)
+    for lb in lbs:
+        for tg in describe_target_groups(client, lb['LoadBalancerArn']):
+            states = describe_target_group_states(client, tg['TargetGroupArn'])
+            lb['states'] = states
+    return lbs
 
 
 def loop_load_balancers_pager(client, params, key):
@@ -68,6 +78,27 @@ def loop_load_balancers_pager(client, params, key):
         response = client.describe_load_balancers(**params)
         lbs += response[key]
     return lbs
+
+
+def describe_target_groups(client, lb_arn):
+    response = client.describe_target_groups(LoadBalancerArn=lb_arn)
+    return response['TargetGroups']
+
+
+def describe_target_group_states(elbv2, tg_arn):
+    targets = elbv2.describe_target_health(TargetGroupArn=tg_arn)
+    return target_health_states(targets['TargetHealthDescriptions'])
+
+
+def target_health_states(target_health_descriptions):
+    states = {}
+    for t in target_health_descriptions:
+        state = t['TargetHealth']['State']
+        if state in states:
+            states[state] += 1
+        else:
+            states[state] = 1
+    return states
 
 
 def lb_name_max_len(lbs):

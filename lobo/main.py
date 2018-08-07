@@ -25,6 +25,9 @@ def cli(name, region, profile, scheme, lb_type):
     with click_spinner.spinner():
         lbs = describe_all_load_balancers(elb, elbv2, name)
 
+    if len(lbs) == 0:
+        click.echo('No matches found.')
+        sys.exit(0)
     print_load_balancers_info(lbs, scheme=scheme, lb_type=lb_type)
 
 

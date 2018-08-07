@@ -86,7 +86,7 @@ def describe_load_balancers_elb(client, names, page_size=PAGE_SIZE):
     for lb in lbs:
         instances = describe_instance_health(client, lb['LoadBalancerName'])
         states = aggregate_health_states(instances)
-        lb['states'] = states
+        lb['states'] = dict_to_str(states)
     return lbs
 
 
@@ -99,7 +99,7 @@ def describe_load_balancers_elbv2(client, names, page_size=PAGE_SIZE):
     for lb in lbs:
         for tg in describe_target_groups(client, lb['LoadBalancerArn']):
             states = describe_target_group_states(client, tg['TargetGroupArn'])
-            lb['states'] = states
+            lb['states'] = dict_to_str(states)
     return lbs
 
 
@@ -189,6 +189,10 @@ def create_boto_client(session, client):
     except NoRegionError as e:
         click.echo(e, err=True)
         sys.exit(1)
+
+
+def dict_to_str(d):
+    return ' '.join(['{}: {}'.format(k, v) for k, v in d.items()])
 
 
 if __name__ == '__main__':

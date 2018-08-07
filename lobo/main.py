@@ -2,7 +2,6 @@ import sys
 import boto3
 import click
 import click_spinner
-import botocore
 
 from botocore.exceptions import ProfileNotFound, NoRegionError, ClientError
 
@@ -61,11 +60,11 @@ def describe_all_load_balancers(elb, elbv2, name):
     if name:
         try:
             return describe_load_balancers_elb(elb, [name])
-        except ClientError as e:
+        except ClientError:
             pass
         try:
             return describe_load_balancers_elbv2(elbv2, [name])
-        except ClientError as e:
+        except ClientError:
             pass
         if len(lbs) == 0:
             name_filter_set = True

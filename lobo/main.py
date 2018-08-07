@@ -69,8 +69,9 @@ def describe_all_load_balancers(elb, elbv2, name):
         if len(lbs) == 0:
             name_filter_set = True
 
-    lbs += describe_load_balancers_elb(elb)
-    lbs += describe_load_balancers_elbv2(elbv2)
+    names = []
+    lbs += describe_load_balancers_elb(elb, names)
+    lbs += describe_load_balancers_elbv2(elbv2, names)
 
     if name_filter_set:
         lbs = list(filter(lambda x: name in x['LoadBalancerName'], lbs))
@@ -78,7 +79,7 @@ def describe_all_load_balancers(elb, elbv2, name):
     return lbs
 
 
-def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
+def describe_load_balancers_elb(client, names, page_size=PAGE_SIZE):
     params = {'LoadBalancerNames': names, 'PageSize': page_size}
     key = 'LoadBalancerDescriptions'
     lbs = loop_load_balancers_pager(client, params, key)
@@ -89,7 +90,7 @@ def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
     return lbs
 
 
-def describe_load_balancers_elbv2(client, names=[], page_size=PAGE_SIZE):
+def describe_load_balancers_elbv2(client, names, page_size=PAGE_SIZE):
     params = {'Names': names}
     if len(names) == 0:
         params['PageSize'] = page_size

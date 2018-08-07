@@ -3,37 +3,43 @@ import boto3
 import click
 import click_spinner
 
-from botocore.exceptions import ProfileNotFound, NoRegionError
+from botocore.exceptions import ProfileNotFound, NoRegionError, ClientError
 
-version = '0.0.1'
+version = '0.0.2'
 
 PAGE_SIZE = 100
 
 
 @click.command()
 @click.version_option(version=version, message=version)
+@click.argument('name', required=False)
 @click.option('-s', '--scheme', is_flag=True, help='Show scheme')
 @click.option('-t', '--lb-type', is_flag=True, help='Show type')
 @click.option('-p', '--profile', help='AWS profile')
 @click.option('-r', '--region', help='AWS region')
-def cli(region, profile, scheme, lb_type):
+def cli(name, region, profile, scheme, lb_type):
     session = create_boto_session(region, profile)
     elb = create_boto_client(session, 'elb')
     elbv2 = create_boto_client(session, 'elbv2')
 
     with click_spinner.spinner():
-        lbs = describe_all_load_balancers(elb, elbv2)
+        lbs = describe_all_load_balancers(elb, elbv2, name)
 
     print_load_balancers_info(lbs, scheme=scheme, lb_type=lb_type)
 
 
 def print_load_balancers_info(lbs, **kwargs):
-    name_pad = lb_name_max_len(lbs)
+    name_pad = max_len_value_in_dict(lbs, 'LoadBalancerName')
+    scheme_pad = max_len_value_in_dict(lbs, 'Scheme')
+    type_pad = max_len_value_in_dict(lbs, 'Type')
+
     for lb in sorted(lbs, key=lambda k: k['LoadBalancerName']):
         template = '{name:{name_pad}}'
         params = {
             'name': lb['LoadBalancerName'],
             'name_pad': name_pad,
+            'scheme_pad': scheme_pad,
+            'type_pad': type_pad,
             'lb': lb,
         }
         template, params = show_toggled_outputs(template, params, **kwargs)
@@ -43,31 +49,62 @@ def print_load_balancers_info(lbs, **kwargs):
         click.echo(template.format(**params))
 
 
-def describe_all_load_balancers(elb, elbv2):
-    elb_lbs = describe_load_balancers_elb(elb)
-    elbv2_lbs = describe_load_balancers_elbv2(elbv2)
-    return elb_lbs + elbv2_lbs
+def describe_all_load_balancers(elb, elbv2, name):
+    '''
+    Describe both elb and elbv2 load balancers.
+
+    if `name` is not set.
+        - Returns a list of load balancers.
+
+    if `name` is set:
+        - Retruns a list of a single load balancer if `name` matches.
+        - Otherwise, returns a list of load balancers which contain `name`.
+    '''
+    lbs = []
+    name_filter_set = False
+    if name:
+        try:
+            return describe_load_balancers_elb(elb, [name])
+        except ClientError:
+            pass
+        try:
+            return describe_load_balancers_elbv2(elbv2, [name])
+        except ClientError:
+            pass
+        if len(lbs) == 0:
+            name_filter_set = True
+
+    names = []
+    lbs += describe_load_balancers_elb(elb, names)
+    lbs += describe_load_balancers_elbv2(elbv2, names)
+
+    if name_filter_set:
+        lbs = list(filter(lambda x: name in x['LoadBalancerName'], lbs))
+
+    return lbs
 
 
-def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
+def describe_load_balancers_elb(client, names, page_size=PAGE_SIZE):
     params = {'LoadBalancerNames': names, 'PageSize': page_size}
     key = 'LoadBalancerDescriptions'
     lbs = loop_load_balancers_pager(client, params, key)
     for lb in lbs:
         instances = describe_instance_health(client, lb['LoadBalancerName'])
         states = aggregate_health_states(instances)
-        lb['states'] = states
+        lb['states'] = dict_to_str(states)
     return lbs
 
 
-def describe_load_balancers_elbv2(client, names=[], page_size=PAGE_SIZE):
-    params = {'Names': names, 'PageSize': page_size}
+def describe_load_balancers_elbv2(client, names, page_size=PAGE_SIZE):
+    params = {'Names': names}
+    if len(names) == 0:
+        params['PageSize'] = page_size
     key = 'LoadBalancers'
     lbs = loop_load_balancers_pager(client, params, key)
     for lb in lbs:
         for tg in describe_target_groups(client, lb['LoadBalancerArn']):
             states = describe_target_group_states(client, tg['TargetGroupArn'])
-            lb['states'] = states
+            lb['states'] = dict_to_str(states)
     return lbs
 
 
@@ -117,9 +154,9 @@ def aggregate_health_states(targets):
     return states
 
 
-def lb_name_max_len(lbs):
-    lb_names = [x['LoadBalancerName'] for x in lbs]
-    return len(max(lb_names, key=len))
+def max_len_value_in_dict(l, key):
+    v_l = [x.get(key, ' ') for x in l]
+    return len(max(v_l, key=len))
 
 
 def show_toggled_outputs(template, params, **kwargs):
@@ -132,13 +169,13 @@ def show_toggled_outputs(template, params, **kwargs):
 
 
 def toggle_scheme_output(template, params):
-    template += '  {scheme:15}'
+    template += '  {scheme:{scheme_pad}}'
     params['scheme'] = params['lb']['Scheme']
     return template, params
 
 
 def toggle_type_output(template, params):
-    template += '  {type:11}'
+    template += '  {type:{type_pad}}'
     params['type'] = params['lb'].get('Type', 'classic')
     return template, params
 
@@ -157,6 +194,10 @@ def create_boto_client(session, client):
     except NoRegionError as e:
         click.echo(e, err=True)
         sys.exit(1)
+
+
+def dict_to_str(d):
+    return ' '.join(['{}: {}'.format(k, v) for k, v in d.items()])
 
 
 if __name__ == '__main__':

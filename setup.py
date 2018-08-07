@@ -15,7 +15,7 @@ requirements = [
 
 setup(
     name="lobo",
-    version="0.0.1",
+    version="0.0.2",
     url="https://github.com/boroivanov/lobo",
 
     author='Borislav Ivanov',

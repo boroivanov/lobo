@@ -2,8 +2,9 @@ import sys
 import boto3
 import click
 import click_spinner
+import botocore
 
-from botocore.exceptions import ProfileNotFound, NoRegionError
+from botocore.exceptions import ProfileNotFound, NoRegionError, ClientError
 
 version = '0.0.1'
 
@@ -12,17 +13,18 @@ PAGE_SIZE = 100
 
 @click.command()
 @click.version_option(version=version, message=version)
+@click.argument('name', required=False)
 @click.option('-s', '--scheme', is_flag=True, help='Show scheme')
 @click.option('-t', '--lb-type', is_flag=True, help='Show type')
 @click.option('-p', '--profile', help='AWS profile')
 @click.option('-r', '--region', help='AWS region')
-def cli(region, profile, scheme, lb_type):
+def cli(name, region, profile, scheme, lb_type):
     session = create_boto_session(region, profile)
     elb = create_boto_client(session, 'elb')
     elbv2 = create_boto_client(session, 'elbv2')
 
     with click_spinner.spinner():
-        lbs = describe_all_load_balancers(elb, elbv2)
+        lbs = describe_all_load_balancers(elb, elbv2, name)
 
     print_load_balancers_info(lbs, scheme=scheme, lb_type=lb_type)
 
@@ -43,10 +45,38 @@ def print_load_balancers_info(lbs, **kwargs):
         click.echo(template.format(**params))
 
 
-def describe_all_load_balancers(elb, elbv2):
-    elb_lbs = describe_load_balancers_elb(elb)
-    elbv2_lbs = describe_load_balancers_elbv2(elbv2)
-    return elb_lbs + elbv2_lbs
+def describe_all_load_balancers(elb, elbv2, name):
+    '''
+    Describe both elb and elbv2 load balancers.
+
+    if `name` is not set.
+        - Returns a list of load balancers.
+
+    if `name` is set:
+        - Retruns a list of a single load balancer if `name` matches.
+        - Otherwise, returns a list of load balancers which contain `name`.
+    '''
+    lbs = []
+    name_filter_set = False
+    if name:
+        try:
+            return describe_load_balancers_elb(elb, [name])
+        except ClientError as e:
+            pass
+        try:
+            return describe_load_balancers_elbv2(elbv2, [name])
+        except ClientError as e:
+            pass
+        if len(lbs) == 0:
+            name_filter_set = True
+
+    lbs += describe_load_balancers_elb(elb)
+    lbs += describe_load_balancers_elbv2(elbv2)
+
+    if name_filter_set:
+        lbs = list(filter(lambda x: name in x['LoadBalancerName'], lbs))
+
+    return lbs
 
 
 def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
@@ -61,7 +91,9 @@ def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
 
 
 def describe_load_balancers_elbv2(client, names=[], page_size=PAGE_SIZE):
-    params = {'Names': names, 'PageSize': page_size}
+    params = {'Names': names}
+    if len(names) == 0:
+        params['PageSize'] = page_size
     key = 'LoadBalancers'
     lbs = loop_load_balancers_pager(client, params, key)
     for lb in lbs:

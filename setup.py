@@ -1,5 +1,11 @@
 from setuptools import setup, find_packages
+import io
+from os import path
 
+
+this_directory = path.abspath(path.dirname(__file__))
+with io.open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 requirements = [
     'Click>=6.0',
@@ -16,6 +22,8 @@ setup(
     author_email='borogl@gmail.com',
 
     description='AWS Load Balancer list cli',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
 
     packages=find_packages(),
     install_requires=requirements,

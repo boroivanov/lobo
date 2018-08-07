@@ -12,7 +12,7 @@ install:
   - mkdir ~/.aws
   - printf "[default]\nregion = us-east-1\n[profile no-region]" > ~/.aws/config
 
-script: tox
+script: echo 'tests go here'
 
 deploy:
   provider: pypi

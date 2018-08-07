@@ -40,7 +40,7 @@ def print_load_balancers_info(lbs, **kwargs):
 
         template += '  {states}'
         params['states'] = lb.get('states', '')
-        print(template.format(**params))
+        click.echo(template.format(**params))
 
 
 def describe_all_load_balancers(elb, elbv2):
@@ -52,7 +52,12 @@ def describe_all_load_balancers(elb, elbv2):
 def describe_load_balancers_elb(client, names=[], page_size=PAGE_SIZE):
     params = {'LoadBalancerNames': names, 'PageSize': page_size}
     key = 'LoadBalancerDescriptions'
-    return loop_load_balancers_pager(client, params, key)
+    lbs = loop_load_balancers_pager(client, params, key)
+    for lb in lbs:
+        instances = describe_instance_health(client, lb['LoadBalancerName'])
+        states = aggregate_health_states(instances)
+        lb['states'] = states
+    return lbs
 
 
 def describe_load_balancers_elbv2(client, names=[], page_size=PAGE_SIZE):
@@ -80,20 +85,31 @@ def loop_load_balancers_pager(client, params, key):
     return lbs
 
 
+def describe_instance_health(client, lb_name):
+    '''Describe elb health states'''
+    response = client.describe_instance_health(LoadBalancerName=lb_name)
+    return response['InstanceStates']
+
+
 def describe_target_groups(client, lb_arn):
+    '''Describe elbv2 health states'''
     response = client.describe_target_groups(LoadBalancerArn=lb_arn)
     return response['TargetGroups']
 
 
 def describe_target_group_states(elbv2, tg_arn):
     targets = elbv2.describe_target_health(TargetGroupArn=tg_arn)
-    return target_health_states(targets['TargetHealthDescriptions'])
+    return aggregate_health_states(targets['TargetHealthDescriptions'])
 
 
-def target_health_states(target_health_descriptions):
+def aggregate_health_states(targets):
+    '''Aggregate elb or elbv2 health stats'''
     states = {}
-    for t in target_health_descriptions:
-        state = t['TargetHealth']['State']
+    for t in targets:
+        if 'TargetHealth' in t:
+            state = t['TargetHealth']['State']
+        else:
+            state = t['State']
         if state in states:
             states[state] += 1
         else:

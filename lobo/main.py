@@ -29,12 +29,17 @@ def cli(name, region, profile, scheme, lb_type):
 
 
 def print_load_balancers_info(lbs, **kwargs):
-    name_pad = lb_name_max_len(lbs)
+    name_pad = max_len_value_in_dict(lbs, 'LoadBalancerName')
+    scheme_pad = max_len_value_in_dict(lbs, 'Scheme')
+    type_pad = max_len_value_in_dict(lbs, 'Type')
+
     for lb in sorted(lbs, key=lambda k: k['LoadBalancerName']):
         template = '{name:{name_pad}}'
         params = {
             'name': lb['LoadBalancerName'],
             'name_pad': name_pad,
+            'scheme_pad': scheme_pad,
+            'type_pad': type_pad,
             'lb': lb,
         }
         template, params = show_toggled_outputs(template, params, **kwargs)
@@ -149,9 +154,9 @@ def aggregate_health_states(targets):
     return states
 
 
-def lb_name_max_len(lbs):
-    lb_names = [x['LoadBalancerName'] for x in lbs]
-    return len(max(lb_names, key=len))
+def max_len_value_in_dict(l, key):
+    v_l = [x.get(key, ' ') for x in l]
+    return len(max(v_l, key=len))
 
 
 def show_toggled_outputs(template, params, **kwargs):
@@ -164,13 +169,13 @@ def show_toggled_outputs(template, params, **kwargs):
 
 
 def toggle_scheme_output(template, params):
-    template += '  {scheme:15}'
+    template += '  {scheme:{scheme_pad}}'
     params['scheme'] = params['lb']['Scheme']
     return template, params
 
 
 def toggle_type_output(template, params):
-    template += '  {type:11}'
+    template += '  {type:{type_pad}}'
     params['type'] = params['lb'].get('Type', 'classic')
     return template, params
 

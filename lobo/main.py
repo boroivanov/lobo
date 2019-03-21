@@ -2,6 +2,8 @@ import sys
 import boto3
 import click
 import click_spinner
+import threading
+import queue
 
 from botocore.exceptions import ProfileNotFound, NoRegionError, ClientError
 
@@ -91,11 +93,18 @@ def describe_load_balancers_elb(client, names, page_size=PAGE_SIZE):
     params = {'LoadBalancerNames': names, 'PageSize': page_size}
     key = 'LoadBalancerDescriptions'
     lbs = loop_load_balancers_pager(client, params, key)
+
+    q = queue.Queue()
+    threads = []
+
     for lb in lbs:
-        instances = describe_instance_health(client, lb['LoadBalancerName'])
-        states = aggregate_health_states(instances)
-        lb['states'] = dict_to_str(states)
-    return lbs
+        t = threading.Thread(target=describe_elb, args=(client, lb, q))
+        t.start()
+        threads.append(t)
+
+    [t.join() for t in threads]
+
+    return [q.get(t) for t in threads]
 
 
 def describe_load_balancers_elbv2(client, names, page_size=PAGE_SIZE):
@@ -104,11 +113,57 @@ def describe_load_balancers_elbv2(client, names, page_size=PAGE_SIZE):
         params['PageSize'] = page_size
     key = 'LoadBalancers'
     lbs = loop_load_balancers_pager(client, params, key)
+
+    q = queue.Queue()
+    threads = []
+
     for lb in lbs:
-        for tg in describe_target_groups(client, lb['LoadBalancerArn']):
+        t = threading.Thread(target=describe_elbv2, args=(client, lb, q))
+        t.start()
+        threads.append(t)
+
+    [t.join() for t in threads]
+    return [q.get(t) for t in threads]
+
+
+def describe_elb(client, lb, queue):
+    '''Queue adding the elb state of an instance to the elb dict.
+
+    :param client: elb client
+    :type client: boto.client
+    :param lb: load balancer dict
+    :type lb: dict
+    :param queue: Queue
+    :type queue: queue.Queue
+    :return: None
+    '''
+    instances = describe_instance_health(client, lb['LoadBalancerName'])
+    states = aggregate_health_states(instances)
+    lb['states'] = dict_to_str(states)
+    queue.put(lb)
+
+
+def describe_elbv2(client, lb, queue):
+    '''Queue adding the elbv2 state of a target to the elbv2 dict.
+
+    :param client: elbv2 client
+    :type client: boto.client
+    :param lb: load balancer v2 dict
+    :type lb: dict
+    :param queue: Queue
+    :type queue: queue.Queue
+    :return: Queue
+    '''
+    target_groups = describe_target_groups(client, lb['LoadBalancerArn'])
+
+    if len(target_groups) >= 1:
+        for tg in target_groups:
             states = describe_target_group_states(client, tg['TargetGroupArn'])
             lb['states'] = dict_to_str(states)
-    return lbs
+    else:
+        lb['states'] = ''
+
+    queue.put(lb)
 
 
 def loop_load_balancers_pager(client, params, key):

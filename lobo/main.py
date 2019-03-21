@@ -7,7 +7,7 @@ import queue
 
 from botocore.exceptions import ProfileNotFound, NoRegionError, ClientError
 
-version = '0.0.2'
+version = '0.0.3'
 
 PAGE_SIZE = 100
 

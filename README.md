@@ -2,6 +2,8 @@
 [![Build Status](https://travis-ci.org/boroivanov/lobo.svg)](https://travis-ci.org/boroivanov/lobo)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/65b11606d2974a6592a1b15fd64d01d6)](https://www.codacy.com/project/boroivanov/lobo/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=boroivanov/lobo&amp;utm_campaign=Badge_Grade_Dashboard)
 [![Maintainability](https://api.codeclimate.com/v1/badges/19368e2117abcea88894/maintainability)](https://codeclimate.com/github/boroivanov/lobo/maintainability)
+[![Downloads](https://pepy.tech/badge/lobo)](https://pepy.tech/project/lobo)
+[![Downloads](https://pepy.tech/badge/lobo/month)](https://pepy.tech/project/lobo)
 
 # lobo
 A simple cli for listing AWS load balancers and their instances/targets.

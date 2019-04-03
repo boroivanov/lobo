@@ -44,3 +44,7 @@ coverage.xml
 # Python virtual environments
 py2/**
 py3/**
+venv/
+
+# IDEs
+.vscode/
